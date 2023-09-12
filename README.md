@@ -1,7 +1,7 @@
 # go-module-template
 [![go.dev reference](https://pkg.go.dev/badge/github.com/soypat/schedule)](https://pkg.go.dev/github.com/soypat/schedule)
 [![Go Report Card](https://goreportcard.com/badge/github.com/soypat/schedule)](https://goreportcard.com/report/github.com/soypat/schedule)
-[![codecov](https://codecov.io/gh/soypat/go-module-template/branch/main/graph/badge.svg)](https://codecov.io/gh/soypat/go-module-template)
+[![codecov](https://codecov.io/gh/soypat/schedule/branch/main/graph/badge.svg)](https://codecov.io/gh/soypat/schedule)
 [![Go](https://github.com/soypat/schedule/actions/workflows/go.yml/badge.svg)](https://github.com/soypat/schedule/actions/workflows/go.yml)
 [![sourcegraph](https://sourcegraph.com/github.com/soypat/schedule/-/badge.svg)](https://sourcegraph.com/github.com/soypat/schedule?badge)
 [![stability-experimental](https://img.shields.io/badge/stability-experimental-orange.svg)](https://github.com/emersion/stability-badges#experimental)
@@ -27,7 +27,7 @@ go mod download github.com/soypat/schedule@latest
 
 1. Fix `go.mod` file by replacing `github.com/YOURUSER/YOURREPONAME` with your corresponding project repository link.
 
-2. Replace `soypat/go-module-template` in the badge URLs. Make sure you've replaced all of them by performing text search in the readme for `soypat` and `template`.
+2. Replace `soypat/schedule` in the badge URLs. Make sure you've replaced all of them by performing text search in the readme for `soypat` and `template`.
 
 3. Rename `module.go` and `module_test.go` to fit your own repository needs. Below are some exemplary modules that abide by what's generally considered "good practices":
     - [`mu8` minimal machine learning library](https://github.com/soypat/mu8). Note how most interfaces and interface algorithms are defined at the root package level and how the concrete implementations live in the subdirectories.
