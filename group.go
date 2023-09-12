@@ -2,7 +2,6 @@ package schedule
 
 import (
 	"errors"
-	"math"
 	"time"
 )
 
@@ -12,8 +11,14 @@ var (
 	ErrSmallDuration = errors.New("small duration. This may cause missed action errors")
 )
 
+type GroupConfig struct {
+	// Restart specifies if after the last action has been run the group should
+	// continue with the first action, effectively running forever.
+	Restart bool
+}
+
 // NewGroup returns a newly initialized group.
-func NewGroup[T any](actions []Action[T]) (*Group[T], error) {
+func NewGroup[T any](actions []Action[T], cfg GroupConfig) (*Group[T], error) {
 	if len(actions) == 0 {
 		return nil, errors.New("empty actions")
 	}
@@ -59,13 +64,12 @@ type Action[T any] struct {
 	Value    T
 }
 
-// Begin starts or restarts the group action and returns first action
-// which should be executed immediately.
-func (g *Group[T]) Begin() T {
+// Begin starts or restarts the group timer. Update should be called soon after Begin
+// to acquire first action.
+func (g *Group[T]) Begin() {
 	g.start = time.Now()
-	g.lastIdx = math.MinInt
+	g.lastIdx = -1
 	g.failed = false
-	return g.actions[0].Value
 }
 
 // Start time returns the time the group was Started at. If not started returns zero value.
@@ -81,14 +85,28 @@ func (g *Group[T]) Runtime() (sum time.Duration) {
 // Update checks current time against time Group started and returns
 // the next executable action when `ok` is true and `next` duration until next
 // ready action.
+//
+// If ok is false and next is zero the group is done.
 func (g *Group[T]) Update() (v T, ok bool, next time.Duration, err error) {
+	if g.start.IsZero() {
+		panic("Update called before Begin")
+	}
 	if g.failed {
-		return v, ok, next, errGroupFailed
+		return v, false, next, errGroupFailed
 	}
 	elapsed := time.Since(g.start)
+	runtime := g.Runtime()
 	if g.restartOnEnd {
-		elapsed = elapsed % g.Runtime()
+		elapsed = elapsed % runtime
+	} else if elapsed > runtime && g.lastIdx != len(g.actions)-1 {
+		// Easy case of missed last action.
+		g.failed = true
+		return v, false, next, errMissedAction
+	} else if elapsed > runtime {
+		// Is done.
+		return v, false, next, nil
 	}
+
 	var endOfAction time.Duration = 0
 	var nextIdx int
 	for i, action := range g.actions {
@@ -98,6 +116,7 @@ func (g *Group[T]) Update() (v T, ok bool, next time.Duration, err error) {
 			break
 		}
 	}
+
 	next = endOfAction - elapsed
 	if nextIdx == g.lastIdx {
 		return v, false, next, nil // Still need to execute current action.
@@ -118,6 +137,7 @@ func (g *Group[T]) Update() (v T, ok bool, next time.Duration, err error) {
 	}
 
 	g.lastIdx = nextIdx
-	return g.actions[nextIdx].Value, true, next, nil
+	ok = true
+	return g.actions[nextIdx].Value, ok, next, nil
 
 }
