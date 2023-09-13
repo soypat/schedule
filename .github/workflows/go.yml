@@ -33,14 +33,7 @@ jobs:
         go-version-input: 1.19
         go-package: ./...
 
-    - shell: bash
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v3
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-      run: |
-        # Replace `linux` below with the appropriate OS
-        # Options are `alpine`, `linux`, `macos`, `windows`
-        # You will need to setup the environment variables below in github
-        # and the project in codecov.io
-        curl -Os https://uploader.codecov.io/latest/linux/codecov
-        chmod +x codecov
-        CODECOV_TOKEN=$CODECOV_TOKEN ./codecov
