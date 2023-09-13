@@ -15,11 +15,11 @@ The basic building unit of schedules is the `Group` interface.
 
 ```go
 type Group interface {
-    // Begin sets the Group's starting time.
+	// Begin sets the Group's starting time.
 	Begin(time.Time)
-    // ScheduleNext returns the next action when `ok` is true 
-    // and returns the action value v. 
-    // When ok=false and next=0 the Group is done.
+	// ScheduleNext returns the next action when `ok` is true 
+	// and returns the action value v. 
+	// When ok=false and next=0 the Group is done.
 	ScheduleNext(time.Time) (v any, ok bool, next time.Duration, err error)
 }
 ```
@@ -29,11 +29,11 @@ The example below demonstrates a group scheduled to add values to
 sum over the course of 1.5 seconds.
 
 ```go
-    // g is a Group with an integer value type.
-    var sum int
-    const resolution = time.Second/6
-    start := time.Now()
-    g.Begin(start)
+	// g is a Group with an integer value type.
+	var sum int
+	const resolution = time.Second/6
+	start := time.Now()
+	g.Begin(start)
 	for range time.NewTicker(resolution).C {
 		v, ok, next, err := g.ScheduleNext(time.Now())
 		if err != nil {
