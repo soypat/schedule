@@ -70,7 +70,7 @@ func TestGroupCommon(t *testing.T) {
 	restart := false
 	const maxN = 100
 	actionsCp := make([]actionInt, maxN)
-	for n := 2; n < maxN; n++ {
+	for n := 1; n < maxN; n++ {
 		for maxD := time.Duration(2); maxD < 4; maxD++ {
 			for minD := time.Duration(1); minD <= maxD; minD++ {
 				actions, _ := randomIntActions(rng, minD, maxD, n)
@@ -103,8 +103,8 @@ func TestGroupCommon(t *testing.T) {
 
 func testGroupCommon(t *testing.T, g GroupInt, actions []actionInt, restart bool) {
 	n := len(actions)
-	if n <= 1 {
-		panic("nil or short group")
+	if n == 0 {
+		panic("nil or 0 length group")
 	}
 	if restart {
 		panic("unsupported as of yet")
@@ -127,6 +127,7 @@ func testGroupCommon(t *testing.T, g GroupInt, actions []actionInt, restart bool
 		t.Error("bad StartTime result", got, "expected", start)
 	}
 
+	// Handle first object entry as a special case before main loop.
 	v, ok, next, err := g.ScheduleNext(start)
 	if err != nil {
 		t.Fatal("error on first schedule:", err)

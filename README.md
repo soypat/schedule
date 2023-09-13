@@ -1,4 +1,4 @@
-# go-module-template
+# schedule
 [![go.dev reference](https://pkg.go.dev/badge/github.com/soypat/schedule)](https://pkg.go.dev/github.com/soypat/schedule)
 [![Go Report Card](https://goreportcard.com/badge/github.com/soypat/schedule)](https://goreportcard.com/report/github.com/soypat/schedule)
 [![codecov](https://codecov.io/gh/soypat/schedule/branch/main/graph/badge.svg)](https://codecov.io/gh/soypat/schedule)
