@@ -30,7 +30,7 @@ func ExampleGroup() {
 		{Duration: time.Second / 2, Value: 50},
 	}
 
-	g, err := schedule.NewGroupSync(actions, schedule.GroupSyncConfig{})
+	g, err := schedule.NewGroupSync(actions, schedule.GroupSyncConfig{Iterations: 1})
 	if err != nil {
 		panic(err)
 	}
@@ -67,7 +67,7 @@ func ExampleGroup() {
 // TestGroupCommon tests functionality common across all Group* types.
 func TestGroupCommon(t *testing.T) {
 	rng := rand.New(rand.NewSource(1))
-	restart := false
+	iterations := 2
 	const maxN = 100
 	actionsCp := make([]actionInt, maxN)
 	for n := 1; n < maxN; n++ {
@@ -75,20 +75,20 @@ func TestGroupCommon(t *testing.T) {
 			for minD := time.Duration(1); minD <= maxD; minD++ {
 				actions, _ := randomIntActions(rng, minD, maxD, n)
 				copy(actionsCp, actions)
-				gs, err := schedule.NewGroupSync(actions, schedule.GroupSyncConfig{Restart: restart})
+				gs, err := schedule.NewGroupSync(actions, schedule.GroupSyncConfig{Iterations: iterations})
 				if err != nil && !errors.Is(err, schedule.ErrSmallDuration) {
 					t.Fatal(err)
 				}
-				testGroupCommon(t, gs, actions, false)
+				testGroupCommon(t, gs, actions, iterations)
 				if !slices.Equal(actions, actionsCp[:n]) {
 					t.Error("unexpected modification to actions slice from GroupSync implementation", actions, actionsCp[:n])
 				}
 
-				gl, err := schedule.NewGroupLoose(actions, schedule.GroupLooseConfig{Restart: restart})
+				gl, err := schedule.NewGroupLoose(actions, schedule.GroupLooseConfig{Restart: false})
 				if err != nil && !errors.Is(err, schedule.ErrSmallDuration) {
 					t.Fatal(err)
 				}
-				testGroupCommon(t, gl, actions, false)
+				testGroupCommon(t, gl, actions, 1)
 				if !slices.Equal(actions, actionsCp[:n]) {
 					t.Error("unexpected modification to actions slice from GroupLoose implementation", actions, actionsCp[:n])
 				}
@@ -101,14 +101,12 @@ func TestGroupCommon(t *testing.T) {
 	}
 }
 
-func testGroupCommon(t *testing.T, g GroupInt, actions []actionInt, restart bool) {
+func testGroupCommon(t *testing.T, g GroupInt, actions []actionInt, iterations int) {
 	n := len(actions)
 	if n == 0 {
 		panic("nil or 0 length group")
 	}
-	if restart {
-		panic("unsupported as of yet")
-	}
+
 	var groupDuration time.Duration
 	for _, action := range actions {
 		dur := action.Duration
@@ -147,7 +145,11 @@ func testGroupCommon(t *testing.T, g GroupInt, actions []actionInt, restart bool
 	var elapsed time.Duration
 	currentActionIdx := 0
 	elapsedToNext := actions[0].Duration
-	for ; elapsed <= groupDuration; elapsed++ {
+	totalDuration := groupDuration * time.Duration(iterations)
+	if iterations == -1 {
+		totalDuration *= -5 // Run infinite loop 5 times.
+	}
+	for ; elapsed <= totalDuration; elapsed++ {
 		now = start.Add(elapsed)
 		v, ok, next, err := g.ScheduleNext(now)
 		if err != nil {
@@ -157,7 +159,7 @@ func testGroupCommon(t *testing.T, g GroupInt, actions []actionInt, restart bool
 			t.Error("bad StartTime result", got, "want", start)
 		}
 		done := !ok && next == 0
-		wantDone := elapsed == groupDuration
+		wantDone := elapsed == totalDuration && iterations != -1
 		if done != wantDone {
 			t.Error("unexpected value of done", done, "wanted", wantDone)
 		}
