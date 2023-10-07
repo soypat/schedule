@@ -125,26 +125,9 @@ func testGroupCommon(t *testing.T, g GroupInt, actions []actionInt, iterations i
 		t.Error("bad StartTime result", got, "expected", start)
 	}
 
-	// Handle first object entry as a special case before main loop.
-	v, ok, next, err := g.ScheduleNext(start)
-	if err != nil {
-		t.Fatal("error on first schedule:", err)
-	}
-	if v != actions[0].Value {
-		t.Error("first action value mismatch")
-	}
-	if !ok {
-		t.Error("expected first action to yield ok=true")
-	}
-	if next != actions[0].Duration {
-		t.Error("expected the time until second action to be first actions duration", next, actions[0].Duration, actions[0].Duration)
-	}
-
 	// Main loop.
 	now := start
 	var elapsed time.Duration
-	currentActionIdx := 0
-	elapsedToNext := actions[0].Duration
 	totalDuration := groupDuration * time.Duration(iterations)
 	if iterations == -1 {
 		totalDuration *= -5 // Run infinite loop 5 times.
@@ -169,24 +152,19 @@ func testGroupCommon(t *testing.T, g GroupInt, actions []actionInt, iterations i
 		if done {
 			break
 		}
+		currentActionIdx, elapsedToNext := currentIdx(actions, elapsed%groupDuration)
+		if next != elapsedToNext {
+			t.Error("unexpected `next`", next, "wanted", elapsedToNext)
+		}
 		if !ok {
-			wantNext := elapsedToNext - elapsed
-			if next != wantNext {
-				t.Error("unexpected `next` for !ok", next, "wanted", wantNext)
-			}
 			continue
 		}
 		// Gotten to this point we scheduled an action.
-		wantValue := currentActionIdx + 2
+		wantValue := currentActionIdx + 1
 		if v != wantValue {
 			t.Error("unexpected value", v, "wanted", wantValue)
 		}
-		currentActionIdx++
-		elapsedToNext += actions[currentActionIdx].Duration
-		wantNext := elapsedToNext - elapsed
-		if next != wantNext {
-			t.Error("unexpected `next`", next, "wanted", wantNext)
-		}
+
 	}
 
 	// By now the group is done.
@@ -242,4 +220,15 @@ func min[T constraints.Ordered](a, b T) T {
 		return a
 	}
 	return b
+}
+
+func currentIdx[T any](actions []schedule.Action[T], elapsed time.Duration) (int, time.Duration) {
+	var endOfAction time.Duration = 0
+	for i, action := range actions {
+		endOfAction += action.Duration
+		if elapsed < endOfAction {
+			return i, endOfAction - elapsed
+		}
+	}
+	return -1, 0
 }

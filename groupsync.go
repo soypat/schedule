@@ -2,6 +2,7 @@ package schedule
 
 import (
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -92,6 +93,38 @@ func (g *GroupSync[T]) Duration() time.Duration {
 	return g.duration
 }
 
+func (g *GroupSync[T]) scheduleNext(now time.Time) (v T, ok bool, next time.Duration, err error) {
+	elapsed := now.Sub(g.start)
+	runtime := g.Duration()
+
+	restartActive := g.iterations == -1 || g.iterations > 1 && elapsed < time.Duration(g.iterations)*runtime
+	if restartActive {
+		elapsed = elapsed % runtime
+	}
+
+	// Find index of next action.
+	nextIdx, next := nextIdx(g.actions, elapsed)
+	if nextIdx == g.lastIdx {
+		return v, false, next, nil // Still need to execute current action.
+	}
+	// We check the worst case scenario where we missed an action.
+	if nextIdx != -1 && !restartActive && nextIdx != g.lastIdx+1 ||
+		(nextIdx != -1 && restartActive && nextIdx != (g.lastIdx+1)%(len(g.actions))) {
+		g.failed = true
+		return v, false, 0, errMissedAction // Missed action.
+	} else if nextIdx == -1 {
+		// We are done, time exceeded.
+		return v, false, 0, nil
+	}
+
+	if nextIdx == g.lastIdx+1 || (restartActive && nextIdx == 0 && g.lastIdx == len(g.actions)-1) {
+		// It is time for the next action.
+		g.lastIdx = nextIdx
+		return g.actions[nextIdx].Value, true, next, nil
+	}
+	panic(fmt.Sprintf("unexpected nextIdx: %d, lastIdx: %d", nextIdx, g.lastIdx))
+}
+
 // ScheduleNext checks `now` against time GroupSync started and returns
 // the next executable action when `ok` is true and `next` duration until next
 // ready action.
@@ -104,8 +137,10 @@ func (g *GroupSync[T]) ScheduleNext(now time.Time) (v T, ok bool, next time.Dura
 	if g.failed {
 		return v, false, next, errGroupFailed
 	}
+	return g.scheduleNext(now)
 	elapsed := now.Sub(g.start)
 	runtime := g.Duration()
+
 	restartActive := g.iterations == -1 || g.iterations > 1 && elapsed < time.Duration(g.iterations)*runtime
 	if restartActive {
 		// We're doing more than one iteration so we set `elapsed` to the offset from
@@ -181,4 +216,15 @@ func actionsDuration[T any](actions []Action[T], canZero bool) (duration time.Du
 		err = ErrSmallDuration
 	}
 	return duration, err
+}
+
+func nextIdx[T any](actions []Action[T], elapsed time.Duration) (int, time.Duration) {
+	var endOfAction time.Duration = 0
+	for i, action := range actions {
+		endOfAction += action.Duration
+		if elapsed < endOfAction {
+			return i, endOfAction - elapsed
+		}
+	}
+	return -1, 0
 }
