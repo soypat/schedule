@@ -93,6 +93,12 @@ func (g *GroupSync[T]) Duration() time.Duration {
 	return g.duration
 }
 
+// Iterations returns the number of iterations the group will run for.
+// It may be -1 for infinite iterations.
+func (g *GroupSync[T]) Iterations() int {
+	return g.iterations
+}
+
 // ScheduleNext checks `now` against time GroupSync started and returns
 // the next executable action when `ok` is true and `next` duration until next
 // ready action.
@@ -118,7 +124,7 @@ func (g *GroupSync[T]) scheduleNext(now time.Time) (v T, ok bool, next time.Dura
 	}
 
 	// Find index of next action.
-	nextIdx, next := nextIdx(g.actions, elapsed)
+	nextIdx, next := currentIdx(g.actions, elapsed)
 	if nextIdx == g.lastIdx {
 		return v, false, next, nil // Still need to execute current action.
 	}
@@ -159,7 +165,7 @@ func actionsDuration[T any](actions []Action[T], canZero bool) (duration time.Du
 	return duration, err
 }
 
-func nextIdx[T any](actions []Action[T], elapsed time.Duration) (int, time.Duration) {
+func currentIdx[T any](actions []Action[T], elapsed time.Duration) (int, time.Duration) {
 	var endOfAction time.Duration = 0
 	for i, action := range actions {
 		endOfAction += action.Duration

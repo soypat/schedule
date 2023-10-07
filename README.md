@@ -24,6 +24,19 @@ type Group interface {
 }
 ```
 
+A more complete interface could be:
+```go
+type GroupFull interface {
+	Group
+	// Start time returns the time the group was started at.
+	StartTime() time.Time
+	// Durations returns how long a single iteration lasts.
+	Duration() time.Duration
+	// Amount of times group will run. -1 for infinite iterations.
+	Iterations() int
+}
+```
+
 ## Example
 The example below demonstrates a group scheduled to add values to
 sum over the course of 1.5 seconds.
@@ -34,7 +47,7 @@ sum over the course of 1.5 seconds.
 	const resolution = time.Second/6
 	start := time.Now()
 	g.Begin(start)
-	for range time.NewTicker(resolution).C {
+	for {
 		v, ok, next, err := g.ScheduleNext(time.Now())
 		if err != nil {
 			panic(err)
@@ -48,6 +61,7 @@ sum over the course of 1.5 seconds.
 		}
 		sum += v
 		fmt.Println("added", v, "to sum", sum)
+		time.Sleep(time.Second)
 	}
 	fmt.Println("done!", time.Since(start))
 ```

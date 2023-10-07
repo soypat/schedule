@@ -19,6 +19,7 @@ type GroupInt interface {
 	// Expect v to be zero only
 	ScheduleNext(time.Time) (v int, ok bool, next time.Duration, err error)
 	Duration() time.Duration
+	Iterations() int
 	StartTime() time.Time
 }
 
@@ -79,7 +80,7 @@ func TestGroupCommon(t *testing.T) {
 					if err != nil && !errors.Is(err, schedule.ErrSmallDuration) {
 						t.Fatal(err)
 					}
-					testGroupCommon(t, gs, actions, iterations)
+					testGroupCommon(t, gs, actions)
 					if !slices.Equal(actions, actionsCp[:n]) {
 						t.Error("unexpected modification to actions slice from GroupSync implementation", actions, actionsCp[:n])
 					}
@@ -88,7 +89,7 @@ func TestGroupCommon(t *testing.T) {
 					if err != nil && !errors.Is(err, schedule.ErrSmallDuration) {
 						t.Fatal(err)
 					}
-					testGroupCommon(t, gl, actions, iterations)
+					testGroupCommon(t, gl, actions)
 					if !slices.Equal(actions, actionsCp[:n]) {
 						t.Error("unexpected modification to actions slice from GroupLoose implementation", actions, actionsCp[:n])
 					}
@@ -102,7 +103,7 @@ func TestGroupCommon(t *testing.T) {
 	}
 }
 
-func testGroupCommon(t *testing.T, g GroupInt, actions []actionInt, iterations int) {
+func testGroupCommon(t *testing.T, g GroupInt, actions []actionInt) {
 	n := len(actions)
 	if n == 0 {
 		panic("nil or 0 length group")
@@ -129,6 +130,7 @@ func testGroupCommon(t *testing.T, g GroupInt, actions []actionInt, iterations i
 	// Main loop.
 	now := start
 	var elapsed time.Duration
+	iterations := g.Iterations()
 	totalDuration := groupDuration * time.Duration(iterations)
 	if iterations == -1 {
 		totalDuration *= -5 // Run infinite loop 5 times.

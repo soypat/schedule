@@ -60,6 +60,12 @@ func (g *GroupLoose[T]) StartTime() time.Time {
 	return g.start
 }
 
+// Iterations returns the number of iterations the group will run for.
+// It may be -1 for infinite iterations.
+func (g *GroupLoose[T]) Iterations() int {
+	return g.iterations
+}
+
 // Duration returns the time it takes to fully execute all actions in group.
 // For GroupLoose it may be zero.
 func (g *GroupLoose[T]) Duration() time.Duration {
