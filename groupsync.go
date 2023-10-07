@@ -74,8 +74,8 @@ type Action[T any] struct {
 	Value    T
 }
 
-// Begins starts or restarts the group timer. Update should be called soon after Begins
-// to acquire first action.
+// Begins sets the start time of the group. It must be called before ScheduleNext.
+// It effectively resets internal state of the group.
 func (g *GroupSync[T]) Begins(start time.Time) {
 	g.start = start
 	g.elapsedToRestart = 0

@@ -13,7 +13,8 @@ The basic building unit of schedules is the `Group` interface.
 
 ```go
 type Group interface {
-	// Begin sets the Group's starting time.
+	// Begins sets the start time of the group. It must be called before ScheduleNext.
+	// It should reset internal state of the Group so that Group can be reused.
 	Begins(time.Time)
 	// ScheduleNext returns the next action when `ok` is true 
 	// and returns the action value v. 

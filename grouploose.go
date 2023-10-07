@@ -46,9 +46,8 @@ type GroupLoose[T any] struct {
 	iterations      int
 }
 
-// Begin starts or restarts the group timer. For GroupLoose its call before
-// CheckNext is not required but is useful for synchronizing the StartTime
-// between other groups.
+// Begins sets the start time of the group. It must be called before ScheduleNext.
+// It effectively resets internal state of the group.
 func (g *GroupLoose[T]) Begins(start time.Time) {
 	g.start = start
 	g.lastActionStart = time.Time{}
