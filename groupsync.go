@@ -2,6 +2,7 @@ package schedule
 
 import (
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -10,27 +11,31 @@ var (
 	errGroupFailed   = errors.New("group failed")
 	ErrSmallDuration = errors.New("small duration. This may cause missed action errors")
 	errZeroDuration  = errors.New("zero duration in GroupSync. Use GroupLoose for when actions can have zero duration")
+	errBadIterations = errors.New("zero or negative iterations")
 )
 
 type GroupSyncConfig struct {
-	// Restart specifies if after the last action has been run the group should
-	// continue with the first action, effectively running forever.
-	Restart bool
+	// Iterations specifies how many times to run the group. Must be greater than zero
+	// or -1 to indicate infinite iterations.
+	Iterations int
 }
 
 // NewGroupSync returns a newly initialized group. Action duration must be greater than zero.
 func NewGroupSync[T any](actions []Action[T], cfg GroupSyncConfig) (*GroupSync[T], error) {
-	if len(actions) == 0 {
-		return nil, errors.New("empty actions")
-	}
 	duration, err := actionsDuration(actions, false)
-	if err != nil && !errors.Is(err, ErrSmallDuration) {
+	switch {
+	case err != nil && !errors.Is(err, ErrSmallDuration):
 		return nil, err
+	case len(actions) == 0:
+		return nil, errors.New("empty actions")
+	case cfg.Iterations <= 0 && cfg.Iterations != -1:
+		return nil, errBadIterations
 	}
+
 	g := &GroupSync[T]{
-		actions:      actions,
-		duration:     duration,
-		restartOnEnd: cfg.Restart,
+		actions:    actions,
+		duration:   duration,
+		iterations: cfg.Iterations,
 	}
 	return g, err // return ErrSmallDuration as a warning to users.
 }
@@ -60,7 +65,7 @@ type GroupSync[T any] struct {
 	duration         time.Duration
 	lastIdx          int
 	actions          []Action[T]
-	restartOnEnd     bool
+	iterations       int
 	failed           bool
 }
 
@@ -88,6 +93,38 @@ func (g *GroupSync[T]) Duration() time.Duration {
 	return g.duration
 }
 
+func (g *GroupSync[T]) scheduleNext(now time.Time) (v T, ok bool, next time.Duration, err error) {
+	elapsed := now.Sub(g.start)
+	runtime := g.Duration()
+
+	restartActive := g.iterations == -1 || g.iterations > 1 && elapsed < time.Duration(g.iterations)*runtime
+	if restartActive {
+		elapsed = elapsed % runtime
+	}
+
+	// Find index of next action.
+	nextIdx, next := nextIdx(g.actions, elapsed)
+	if nextIdx == g.lastIdx {
+		return v, false, next, nil // Still need to execute current action.
+	}
+	// We check the worst case scenario where we missed an action.
+	if nextIdx != -1 && !restartActive && nextIdx != g.lastIdx+1 ||
+		(nextIdx != -1 && restartActive && nextIdx != (g.lastIdx+1)%(len(g.actions))) {
+		g.failed = true
+		return v, false, 0, errMissedAction // Missed action.
+	} else if nextIdx == -1 {
+		// We are done, time exceeded.
+		return v, false, 0, nil
+	}
+
+	if nextIdx == g.lastIdx+1 || (restartActive && nextIdx == 0 && g.lastIdx == len(g.actions)-1) {
+		// It is time for the next action.
+		g.lastIdx = nextIdx
+		return g.actions[nextIdx].Value, true, next, nil
+	}
+	panic(fmt.Sprintf("unexpected nextIdx: %d, lastIdx: %d", nextIdx, g.lastIdx))
+}
+
 // ScheduleNext checks `now` against time GroupSync started and returns
 // the next executable action when `ok` is true and `next` duration until next
 // ready action.
@@ -100,13 +137,20 @@ func (g *GroupSync[T]) ScheduleNext(now time.Time) (v T, ok bool, next time.Dura
 	if g.failed {
 		return v, false, next, errGroupFailed
 	}
+	return g.scheduleNext(now)
 	elapsed := now.Sub(g.start)
 	runtime := g.Duration()
-	if g.restartOnEnd {
+
+	restartActive := g.iterations == -1 || g.iterations > 1 && elapsed < time.Duration(g.iterations)*runtime
+	if restartActive {
+		// We're doing more than one iteration so we set `elapsed` to the offset from
+		// the last restart to calculate which would be the current action we should be executing.
 		elapsed = elapsed - g.elapsedToRestart
 		if elapsed > 2*runtime {
 			g.failed = true
 			return v, false, next, errMissedAction // Missed entire schedule!
+		} else if g.lastIdx == len(g.actions)-1 && elapsed > runtime {
+			elapsed %= runtime // Restart actions.
 		}
 
 	} else if elapsed > runtime && g.lastIdx != len(g.actions)-1 {
@@ -141,11 +185,11 @@ func (g *GroupSync[T]) ScheduleNext(now time.Time) (v T, ok bool, next time.Dura
 		return v, false, 0, nil // No more actions to execute.
 	}
 
-	if (!g.restartOnEnd && nextIdx != g.lastIdx+1) ||
-		(g.restartOnEnd && nextIdx != (g.lastIdx+1)%len(g.actions)) {
+	if (!restartActive && nextIdx != g.lastIdx+1) ||
+		(restartActive && nextIdx != (g.lastIdx+1)%len(g.actions)) {
 		g.failed = true
 		return v, false, 0, errMissedAction // Missed an action
-	} else if g.restartOnEnd && nextIdx == 0 {
+	} else if restartActive && nextIdx == 0 {
 		g.elapsedToRestart = now.Sub(g.start) // Set restart time.
 	}
 
@@ -172,4 +216,15 @@ func actionsDuration[T any](actions []Action[T], canZero bool) (duration time.Du
 		err = ErrSmallDuration
 	}
 	return duration, err
+}
+
+func nextIdx[T any](actions []Action[T], elapsed time.Duration) (int, time.Duration) {
+	var endOfAction time.Duration = 0
+	for i, action := range actions {
+		endOfAction += action.Duration
+		if elapsed < endOfAction {
+			return i, endOfAction - elapsed
+		}
+	}
+	return -1, 0
 }

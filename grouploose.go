@@ -6,24 +6,27 @@ import (
 )
 
 type GroupLooseConfig struct {
-	// Restart specifies if after the last action has been run the group should
-	// continue with the first action, effectively running forever.
-	Restart bool
+	// Iterations specifies how many times to run the group. Must be greater than zero
+	// or -1 to indicate infinite iterations.
+	Iterations int
 }
 
 // NewGroupLoose returns a newly initialized loose timing group.
 func NewGroupLoose[T any](actions []Action[T], cfg GroupLooseConfig) (*GroupLoose[T], error) {
-	if len(actions) == 0 {
-		return nil, errors.New("empty actions")
-	}
 	duration, err := actionsDuration(actions, true)
-	if err != nil && !errors.Is(err, ErrSmallDuration) {
+	switch {
+	case err != nil && !errors.Is(err, ErrSmallDuration):
 		return nil, err
+	case len(actions) == 0:
+		return nil, errors.New("empty actions")
+	case cfg.Iterations <= 0 && cfg.Iterations != -1:
+		return nil, errBadIterations
 	}
+
 	g := &GroupLoose[T]{
-		actions:      actions,
-		duration:     duration,
-		restartOnEnd: cfg.Restart,
+		actions:    actions,
+		duration:   duration,
+		iterations: cfg.Iterations,
 	}
 	return g, nil // ignore ErrSmallDuration for loose groups.
 }
@@ -40,7 +43,7 @@ type GroupLoose[T any] struct {
 	duration        time.Duration
 	lastIdx         int
 	actions         []Action[T]
-	restartOnEnd    bool
+	iterations      int
 }
 
 // Begin starts or restarts the group timer. For GroupLoose its call before
@@ -79,28 +82,22 @@ func (g *GroupLoose[T]) ScheduleNext(now time.Time) (v T, ok bool, next time.Dur
 		return g.actions[0].Value, true, g.actions[0].Duration, nil
 	}
 	actionElapsed := now.Sub(g.lastActionStart)
-	currAction := g.actions[g.lastIdx]
-	nextIdx := g.lastIdx + 1
-	if !g.restartOnEnd && nextIdx == len(g.actions) {
-		// We're at the last action.
-		remaining := currAction.Duration - actionElapsed
-		if remaining > 0 {
-			return v, false, remaining, nil
-		}
-		return v, false, 0, nil // Done.
-	} else if g.restartOnEnd && nextIdx == len(g.actions) {
-		nextIdx = 0 // Restart actions from first.
-	}
+	safeIdx := g.lastIdx % len(g.actions)
+	currAction := g.actions[safeIdx]
 
 	if actionElapsed < currAction.Duration {
-		next = currAction.Duration - actionElapsed
-		return v, false, next, nil // Still waiting for next action
+		return v, false, currAction.Duration - actionElapsed, nil // Still waiting for next action.
 	}
-	g.lastIdx = nextIdx
+	nextIdx := g.lastIdx + 1
+	nextActionEnabled := g.iterations == -1 || nextIdx < len(g.actions)*g.iterations
+	if !nextActionEnabled {
+		return v, false, 0, nil // Done.
+	}
+	g.lastIdx++
 	g.lastActionStart = now
-
+	safeIdx = g.lastIdx % len(g.actions)
 	// We return the full time of the action duration when we start it since we
 	// guarantee each action will take at least it's duration to complete.
 	// This is the same guarantee that time.Sleep provides with regards to the sleep duration.
-	return g.actions[nextIdx].Value, true, g.actions[nextIdx].Duration, nil
+	return g.actions[safeIdx].Value, true, g.actions[safeIdx].Duration, nil
 }
