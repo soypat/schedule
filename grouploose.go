@@ -49,7 +49,7 @@ type GroupLoose[T any] struct {
 // Begin starts or restarts the group timer. For GroupLoose its call before
 // CheckNext is not required but is useful for synchronizing the StartTime
 // between other groups.
-func (g *GroupLoose[T]) Begin(start time.Time) {
+func (g *GroupLoose[T]) Begins(start time.Time) {
 	g.start = start
 	g.lastActionStart = time.Time{}
 	g.lastIdx = -1
@@ -81,6 +81,11 @@ func (g *GroupLoose[T]) ScheduleNext(now time.Time) (v T, ok bool, next time.Dur
 	if g.start.IsZero() {
 		panic("CheckNext called before Begin")
 	}
+	elapsed := now.Sub(g.start)
+	if elapsed < 0 {
+		return v, false, -elapsed, nil // Still waiting for start time.
+	}
+
 	if g.lastIdx == -1 {
 		// Special case for first action.
 		g.lastActionStart = now

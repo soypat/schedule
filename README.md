@@ -14,7 +14,7 @@ The basic building unit of schedules is the `Group` interface.
 ```go
 type Group interface {
 	// Begin sets the Group's starting time.
-	Begin(time.Time)
+	Begins(time.Time)
 	// ScheduleNext returns the next action when `ok` is true 
 	// and returns the action value v. 
 	// When ok=false and next=0 the Group is done.
@@ -44,7 +44,7 @@ sum over the course of 1.5 seconds.
 	var sum int
 	const resolution = time.Second/6
 	start := time.Now()
-	g.Begin(start)
+	g.Begins(start)
 	for {
 		v, ok, next, err := g.ScheduleNext(time.Now())
 		if err != nil {

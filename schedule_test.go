@@ -15,7 +15,7 @@ import (
 type actionInt = schedule.Action[int]
 
 type GroupInt interface {
-	Begin(time.Time)
+	Begins(time.Time)
 	// Expect v to be zero only
 	ScheduleNext(time.Time) (v int, ok bool, next time.Duration, err error)
 	Duration() time.Duration
@@ -40,7 +40,7 @@ func ExampleGroup() {
 
 	const resolution = time.Second / 4
 	var sum int
-	g.Begin(time.Now())
+	g.Begins(time.Now())
 	for range time.NewTicker(resolution).C {
 		v, ok, next, err := g.ScheduleNext(time.Now())
 		if err != nil {
@@ -121,12 +121,24 @@ func testGroupCommon(t *testing.T, g GroupInt, actions []actionInt) {
 		t.Errorf("bad duration calc got %d, wanted %d", g.Duration(), groupDuration)
 	}
 	var start time.Time
-	start = start.Add(1)
-	g.Begin(start) // Setup group.
+	start = start.Add(2)
+	g.Begins(start) // Setup group.
 	if got := g.StartTime(); !got.Equal(start) {
 		t.Error("bad StartTime result", got, "expected", start)
 	}
-
+	v, ok, next, err := g.ScheduleNext(start.Add(-1))
+	if err != nil {
+		t.Fatal("unexpected error when attempting to schedule before begin time:", err)
+	}
+	if v != 0 {
+		t.Error("got non-zero value before begin time", v, "of max", n)
+	}
+	if ok {
+		t.Error("wanted ok=false before begin time")
+	}
+	if next != 1 {
+		t.Error("wanted next=1 before begin time", next)
+	}
 	// Main loop.
 	now := start
 	var elapsed time.Duration

@@ -74,9 +74,9 @@ type Action[T any] struct {
 	Value    T
 }
 
-// Begin starts or restarts the group timer. Update should be called soon after Begin
+// Begins starts or restarts the group timer. Update should be called soon after Begins
 // to acquire first action.
-func (g *GroupSync[T]) Begin(start time.Time) {
+func (g *GroupSync[T]) Begins(start time.Time) {
 	g.start = start
 	g.elapsedToRestart = 0
 	g.lastIdx = -1
@@ -116,6 +116,9 @@ func (g *GroupSync[T]) ScheduleNext(now time.Time) (v T, ok bool, next time.Dura
 
 func (g *GroupSync[T]) scheduleNext(now time.Time) (v T, ok bool, next time.Duration, err error) {
 	elapsed := now.Sub(g.start)
+	if elapsed < 0 {
+		return v, false, -elapsed, nil // Still waiting for start time.
+	}
 	runtime := g.Duration()
 
 	restartActive := g.iterations == -1 || g.iterations > 1 && elapsed < time.Duration(g.iterations)*runtime
