@@ -7,11 +7,12 @@ import (
 )
 
 var (
-	errMissedAction  = errors.New("missed action. This happens if event loop Update is not called at enough high frequency to prevent missing an action between calls")
-	errGroupFailed   = errors.New("group failed")
-	ErrSmallDuration = errors.New("small duration. This may cause missed action errors")
-	errZeroDuration  = errors.New("zero duration in GroupSync. Use GroupLoose for when actions can have zero duration")
-	errBadIterations = errors.New("zero or negative iterations")
+	errBeginNotCalled = errors.New("ScheduleNext called before Begin")
+	errMissedAction   = errors.New("missed action. This happens if event loop Update is not called at enough high frequency to prevent missing an action between calls")
+	errGroupFailed    = errors.New("group failed")
+	ErrSmallDuration  = errors.New("small duration. This may cause missed action errors")
+	errZeroDuration   = errors.New("zero duration in GroupSync. Use GroupLoose for when actions can have zero duration")
+	errBadIterations  = errors.New("zero or negative iterations")
 )
 
 type GroupSyncConfig struct {
@@ -106,7 +107,7 @@ func (g *GroupSync[T]) Iterations() int {
 // If ok is false and next is zero the group is done.
 func (g *GroupSync[T]) ScheduleNext(now time.Time) (v T, ok bool, next time.Duration, err error) {
 	if g.start.IsZero() {
-		panic("Update called before Begin")
+		return v, false, 0, errBeginNotCalled
 	}
 	if g.failed {
 		return v, false, next, errGroupFailed

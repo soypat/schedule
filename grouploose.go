@@ -78,7 +78,7 @@ func (g *GroupLoose[T]) Duration() time.Duration {
 // If ok is false and next is zero the group is done.
 func (g *GroupLoose[T]) ScheduleNext(now time.Time) (v T, ok bool, next time.Duration, err error) {
 	if g.start.IsZero() {
-		panic("CheckNext called before Begin")
+		return v, false, 0, errBeginNotCalled
 	}
 	elapsed := now.Sub(g.start)
 	if elapsed < 0 {
