@@ -61,7 +61,7 @@ sum over the course of 1.5 seconds.
 		}
 		sum += v
 		fmt.Println("added", v, "to sum", sum)
-		time.Sleep(time.Second)
+		time.Sleep(resolution)
 	}
 	fmt.Println("done!", time.Since(start))
 ```
