@@ -93,6 +93,21 @@ func (g *GroupSync[T]) Duration() time.Duration {
 	return g.duration
 }
 
+// ScheduleNext checks `now` against time GroupSync started and returns
+// the next executable action when `ok` is true and `next` duration until next
+// ready action.
+//
+// If ok is false and next is zero the group is done.
+func (g *GroupSync[T]) ScheduleNext(now time.Time) (v T, ok bool, next time.Duration, err error) {
+	if g.start.IsZero() {
+		panic("Update called before Begin")
+	}
+	if g.failed {
+		return v, false, next, errGroupFailed
+	}
+	return g.scheduleNext(now)
+}
+
 func (g *GroupSync[T]) scheduleNext(now time.Time) (v T, ok bool, next time.Duration, err error) {
 	elapsed := now.Sub(g.start)
 	runtime := g.Duration()
@@ -122,81 +137,7 @@ func (g *GroupSync[T]) scheduleNext(now time.Time) (v T, ok bool, next time.Dura
 		g.lastIdx = nextIdx
 		return g.actions[nextIdx].Value, true, next, nil
 	}
-	panic(fmt.Sprintf("unexpected nextIdx: %d, lastIdx: %d", nextIdx, g.lastIdx))
-}
-
-// ScheduleNext checks `now` against time GroupSync started and returns
-// the next executable action when `ok` is true and `next` duration until next
-// ready action.
-//
-// If ok is false and next is zero the group is done.
-func (g *GroupSync[T]) ScheduleNext(now time.Time) (v T, ok bool, next time.Duration, err error) {
-	if g.start.IsZero() {
-		panic("Update called before Begin")
-	}
-	if g.failed {
-		return v, false, next, errGroupFailed
-	}
-	return g.scheduleNext(now)
-	elapsed := now.Sub(g.start)
-	runtime := g.Duration()
-
-	restartActive := g.iterations == -1 || g.iterations > 1 && elapsed < time.Duration(g.iterations)*runtime
-	if restartActive {
-		// We're doing more than one iteration so we set `elapsed` to the offset from
-		// the last restart to calculate which would be the current action we should be executing.
-		elapsed = elapsed - g.elapsedToRestart
-		if elapsed > 2*runtime {
-			g.failed = true
-			return v, false, next, errMissedAction // Missed entire schedule!
-		} else if g.lastIdx == len(g.actions)-1 && elapsed > runtime {
-			elapsed %= runtime // Restart actions.
-		}
-
-	} else if elapsed > runtime && g.lastIdx != len(g.actions)-1 {
-		// Easy case of missed last action.
-		g.failed = true
-		return v, false, next, errMissedAction
-	} else if elapsed >= runtime {
-		// Is done.
-		return v, false, next, nil
-	}
-
-	var endOfAction time.Duration = 0
-	var nextIdx int
-	for i, action := range g.actions {
-		endOfAction += action.Duration
-		if elapsed < endOfAction {
-			nextIdx = i
-			break
-		}
-	}
-
-	next = endOfAction - elapsed
-	if nextIdx == g.lastIdx {
-		return v, false, next, nil // Still need to execute current action.
-	}
-
-	if nextIdx == -1 {
-		if g.lastIdx != len(g.actions)-1 {
-			g.failed = true
-			return v, false, 0, errMissedAction // Too late to execute actions.
-		}
-		return v, false, 0, nil // No more actions to execute.
-	}
-
-	if (!restartActive && nextIdx != g.lastIdx+1) ||
-		(restartActive && nextIdx != (g.lastIdx+1)%len(g.actions)) {
-		g.failed = true
-		return v, false, 0, errMissedAction // Missed an action
-	} else if restartActive && nextIdx == 0 {
-		g.elapsedToRestart = now.Sub(g.start) // Set restart time.
-	}
-
-	g.lastIdx = nextIdx
-	ok = true
-	return g.actions[nextIdx].Value, ok, next, nil
-
+	return v, false, next, fmt.Errorf("unexpected nextIdx: %d, lastIdx: %d", nextIdx, g.lastIdx)
 }
 
 func actionsDuration[T any](actions []Action[T], canZero bool) (duration time.Duration, err error) {
