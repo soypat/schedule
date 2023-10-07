@@ -22,16 +22,16 @@ type GroupSyncConfig struct {
 
 // NewGroupSync returns a newly initialized group. Action duration must be greater than zero.
 func NewGroupSync[T any](actions []Action[T], cfg GroupSyncConfig) (*GroupSync[T], error) {
-	if len(actions) == 0 {
+	duration, err := actionsDuration(actions, false)
+	switch {
+	case err != nil && !errors.Is(err, ErrSmallDuration):
+		return nil, err
+	case len(actions) == 0:
 		return nil, errors.New("empty actions")
-	}
-	if cfg.Iterations <= 0 && cfg.Iterations != -1 {
+	case cfg.Iterations <= 0 && cfg.Iterations != -1:
 		return nil, errBadIterations
 	}
-	duration, err := actionsDuration(actions, false)
-	if err != nil && !errors.Is(err, ErrSmallDuration) {
-		return nil, err
-	}
+
 	g := &GroupSync[T]{
 		actions:    actions,
 		duration:   duration,

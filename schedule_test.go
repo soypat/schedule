@@ -67,34 +67,35 @@ func ExampleGroup() {
 // TestGroupCommon tests functionality common across all Group* types.
 func TestGroupCommon(t *testing.T) {
 	rng := rand.New(rand.NewSource(1))
-	iterations := 2
 	const maxN = 100
 	actionsCp := make([]actionInt, maxN)
 	for n := 1; n < maxN; n++ {
 		for maxD := time.Duration(2); maxD < 4; maxD++ {
 			for minD := time.Duration(1); minD <= maxD; minD++ {
-				actions, _ := randomIntActions(rng, minD, maxD, n)
-				copy(actionsCp, actions)
-				gs, err := schedule.NewGroupSync(actions, schedule.GroupSyncConfig{Iterations: iterations})
-				if err != nil && !errors.Is(err, schedule.ErrSmallDuration) {
-					t.Fatal(err)
-				}
-				testGroupCommon(t, gs, actions, iterations)
-				if !slices.Equal(actions, actionsCp[:n]) {
-					t.Error("unexpected modification to actions slice from GroupSync implementation", actions, actionsCp[:n])
-				}
+				for _, iterations := range []int{1, 2, 3, 5, -1} {
+					actions, _ := randomIntActions(rng, minD, maxD, n)
+					copy(actionsCp, actions)
+					gs, err := schedule.NewGroupSync(actions, schedule.GroupSyncConfig{Iterations: iterations})
+					if err != nil && !errors.Is(err, schedule.ErrSmallDuration) {
+						t.Fatal(err)
+					}
+					testGroupCommon(t, gs, actions, iterations)
+					if !slices.Equal(actions, actionsCp[:n]) {
+						t.Error("unexpected modification to actions slice from GroupSync implementation", actions, actionsCp[:n])
+					}
 
-				gl, err := schedule.NewGroupLoose(actions, schedule.GroupLooseConfig{Restart: false})
-				if err != nil && !errors.Is(err, schedule.ErrSmallDuration) {
-					t.Fatal(err)
-				}
-				testGroupCommon(t, gl, actions, 1)
-				if !slices.Equal(actions, actionsCp[:n]) {
-					t.Error("unexpected modification to actions slice from GroupLoose implementation", actions, actionsCp[:n])
-				}
+					gl, err := schedule.NewGroupLoose(actions, schedule.GroupLooseConfig{Iterations: iterations})
+					if err != nil && !errors.Is(err, schedule.ErrSmallDuration) {
+						t.Fatal(err)
+					}
+					testGroupCommon(t, gl, actions, iterations)
+					if !slices.Equal(actions, actionsCp[:n]) {
+						t.Error("unexpected modification to actions slice from GroupLoose implementation", actions, actionsCp[:n])
+					}
 
-				if t.Failed() {
-					t.FailNow()
+					if t.Failed() {
+						t.FailNow()
+					}
 				}
 			}
 		}
@@ -132,29 +133,33 @@ func testGroupCommon(t *testing.T, g GroupInt, actions []actionInt, iterations i
 	if iterations == -1 {
 		totalDuration *= -5 // Run infinite loop 5 times.
 	}
+	testStr := func() string {
+		v, next := currentIdx(actions, elapsed%groupDuration)
+		return fmt.Sprintf("T=%T, n=%d, iterations=%d, elapsed=%dns, totalDuration=%d, V=%d, next=%dns", g, n, iterations, elapsed, totalDuration, v, next)
+	}
 	for ; elapsed <= totalDuration; elapsed++ {
 		now = start.Add(elapsed)
 		v, ok, next, err := g.ScheduleNext(now)
 		if err != nil {
-			t.Fatal("got error during scheduling:", err)
+			t.Fatalf("%s: unexpected error: %v", testStr(), err)
 		}
 		if got := g.StartTime(); !got.Equal(start) {
-			t.Error("bad StartTime result", got, "want", start)
+			t.Errorf("%s: bad StartTime result %v, want %v", testStr(), got, start)
 		}
 		done := !ok && next == 0
 		wantDone := elapsed == totalDuration && iterations != -1
 		if done != wantDone {
-			t.Error("unexpected value of done", done, "wanted", wantDone)
+			t.Errorf("%s: unexpected value of done %v, want %v", testStr(), done, wantDone)
 		}
 		if !ok && v != 0 {
-			t.Error("!ok action returned non-zero Value", v, "of max", n)
+			t.Errorf("%s: !ok action returned non-zero Value %d of max %d", testStr(), v, n)
 		}
 		if done {
 			break
 		}
 		currentActionIdx, elapsedToNext := currentIdx(actions, elapsed%groupDuration)
 		if next != elapsedToNext {
-			t.Error("unexpected `next`", next, "wanted", elapsedToNext)
+			t.Errorf("%s: unexpected next %d, wanted %d", testStr(), next, elapsedToNext)
 		}
 		if !ok {
 			continue
@@ -162,15 +167,19 @@ func testGroupCommon(t *testing.T, g GroupInt, actions []actionInt, iterations i
 		// Gotten to this point we scheduled an action.
 		wantValue := currentActionIdx + 1
 		if v != wantValue {
-			t.Error("unexpected value", v, "wanted", wantValue)
+			t.Errorf("%s: unexpected value %d, wanted %d", testStr(), v, wantValue)
 		}
+	}
 
+	if iterations == -1 {
+		return // Is infinite loop.
 	}
 
 	// By now the group is done.
 	// We can test that future calls to ScheduleNext still return "done"
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 30; i++ {
 		v, ok, next, err := g.ScheduleNext(now)
+		now = now.Add(1) // Increment time to find possible edge cases.
 		if err != nil {
 			t.Fatal(i, "should not error after end:", err)
 		}
