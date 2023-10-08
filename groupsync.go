@@ -6,13 +6,16 @@ import (
 	"time"
 )
 
+// Common errors.
 var (
-	errBeginNotCalled = errors.New("ScheduleNext called before Begin")
-	errMissedAction   = errors.New("missed action. This happens if event loop Update is not called at enough high frequency to prevent missing an action between calls")
-	errGroupFailed    = errors.New("group failed")
-	ErrSmallDuration  = errors.New("small duration. This may cause missed action errors")
-	errZeroDuration   = errors.New("zero duration in GroupSync. Use GroupLoose for when actions can have zero duration")
-	errBadIterations  = errors.New("zero or negative iterations")
+	errBeginNotCalled   = errors.New("ScheduleNext called before Begin")
+	errMissedAction     = errors.New("missed action. This happens if event loop Update is not called at enough high frequency to prevent missing an action between calls")
+	errGroupFailed      = errors.New("group failed")
+	ErrSmallDuration    = errors.New("small duration. This may cause missed action errors")
+	errZeroDuration     = errors.New("zero duration in GroupSync. Use GroupLoose for when actions can have zero duration")
+	errBadIterations    = errors.New("zero or negative iterations")
+	errNegativeDuration = errors.New("negative action duration")
+	errEmptyActions     = errors.New("empty actions")
 )
 
 type GroupSyncConfig struct {
@@ -28,7 +31,7 @@ func NewGroupSync[T any](actions []Action[T], cfg GroupSyncConfig) (*GroupSync[T
 	case err != nil && !errors.Is(err, ErrSmallDuration):
 		return nil, err
 	case len(actions) == 0:
-		return nil, errors.New("empty actions")
+		return nil, errEmptyActions
 	case cfg.Iterations <= 0 && cfg.Iterations != -1:
 		return nil, errBadIterations
 	}
@@ -157,7 +160,7 @@ func actionsDuration[T any](actions []Action[T], canZero bool) (duration time.Du
 		case !canZero && v.Duration == 0:
 			return 0, errZeroDuration
 		case v.Duration < 0:
-			return 0, errors.New("negative action duration")
+			return 0, errNegativeDuration
 		case v.Duration < time.Millisecond:
 			hasSmallDuration = true
 		}

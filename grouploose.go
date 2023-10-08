@@ -18,7 +18,7 @@ func NewGroupLoose[T any](actions []Action[T], cfg GroupLooseConfig) (*GroupLoos
 	case err != nil && !errors.Is(err, ErrSmallDuration):
 		return nil, err
 	case len(actions) == 0:
-		return nil, errors.New("empty actions")
+		return nil, errEmptyActions
 	case cfg.Iterations <= 0 && cfg.Iterations != -1:
 		return nil, errBadIterations
 	}
